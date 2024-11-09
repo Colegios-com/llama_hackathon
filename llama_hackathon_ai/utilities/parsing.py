@@ -4,8 +4,8 @@ from json_repair import repair_json
 
 def chunk_data(artifact: Artifact) -> list[Chunk]:
     chunks = []
-    chunk_size = 500
-    chunk_overlap = 100
+    chunk_size = 2500
+    chunk_overlap = 500
     content_length = len(artifact.content)
 
     for chunk_start in range(0, content_length, chunk_size - chunk_overlap):

@@ -24,7 +24,6 @@ class TogetherAiClient:
                     '<|eot_id|>'
                 ],
                 'negative_prompt': '',
-                'sessionKey': 'd9c5e540-749a-4c81-b701-6a5397b198d0',
                 'type': 'chat',
                 'messages': [
                     {

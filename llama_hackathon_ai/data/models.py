@@ -2,6 +2,10 @@ from pydantic import BaseModel
 from typing import Optional
 
 
+class Url(BaseModel):
+    url: str
+
+
 class Artifact(BaseModel):
     id: str
     workspace: str
@@ -20,6 +24,7 @@ class Embedding(BaseModel):
 
 
 class Query(BaseModel):
+    context: dict
     workspace: str
     query: str
     history: Optional[list] = None

@@ -3,7 +3,7 @@ from init.cohere import cohere_client
 from data.models import Embedding, Query
 
 
-collection = chroma_client.get_or_create_collection(name='documents', metadata={'hnsw:space': 'cosine'})
+collection = chroma_client.get_or_create_collection(name='llama_hackathon', metadata={'hnsw:space': 'cosine'})
 
 
 def save_data(chunks, embeddings):
