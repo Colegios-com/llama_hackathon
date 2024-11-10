@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
 
 // Packages
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:file_picker/file_picker.dart';
 
 // State
 import 'app_provider.dart';
-import 'models.dart';
 
 // Utilities
 import 'utilities.dart';
@@ -32,21 +33,27 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> {
   ScrollController controller = ScrollController();
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => loadData());
-  }
+  String? imageBase64;
+  bool loadingImage = false;
 
-  Future<void> loadData() async {
-    await Future.delayed(const Duration(seconds: 2));
+  Future selectImage() async {
+    setState(() {
+      loadingImage = true;
+    });
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
 
-    List<String> pathnameComponents = widget.pathname.split('/')
-      ..removeWhere((item) => item.isEmpty);
-
-    if (pathnameComponents.contains('workspace')) {
-      print('Workspace Page');
+    if (result != null) {
+      var fileBytes = result.files.first.bytes;
+      if (fileBytes != null) {
+        imageBase64 = base64Encode(fileBytes);
+      }
     }
+    setState(() {
+      loadingImage = false;
+    });
   }
 
   @override
@@ -69,7 +76,7 @@ class _SplashScreenState extends State<SplashScreen> {
         ),
       ),
       drawer: Drawer(
-        width: 400,
+        width: 300,
         child: ListView.separated(
           padding: const EdgeInsets.all(20),
           itemBuilder: (context, gradeIndex) {
@@ -82,7 +89,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 '${grade['grade']} Grado',
                 style: GoogleFonts.robotoMono(
                   height: 1,
-                  fontSize: 30,
+                  fontSize: 20,
                   fontWeight: FontWeight.w900,
                 ),
               ),
@@ -91,6 +98,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 (subjectIndex) {
                   var subject = subjects[subjectIndex];
                   return ListTile(
+                    contentPadding: const EdgeInsets.all(10),
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -100,7 +108,13 @@ class _SplashScreenState extends State<SplashScreen> {
                         ),
                       ),
                     ),
-                    title: Text(subject['subject']),
+                    title: Text(
+                      subject['subject'],
+                      style: GoogleFonts.roboto(
+                        height: 1,
+                        fontSize: 12,
+                      ),
+                    ),
                   );
                 },
               ),
@@ -130,48 +144,73 @@ class _SplashScreenState extends State<SplashScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Planifica tu clase',
-                              style: GoogleFonts.roboto(
-                                height: 1,
-                                fontSize: 50,
-                                fontWeight: FontWeight.w900,
+                            Expanded(
+                              child: Text(
+                                'Planifica tu clase',
+                                style: GoogleFonts.roboto(
+                                  height: 1,
+                                  fontSize: 50,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
-                            Builder(builder: (context) {
-                              return GestureDetector(
-                                onTap: () {
-                                  Scaffold.of(context).openDrawer();
-                                },
-                                child: Text(
-                                  'o explora el catálogo',
-                                  style: GoogleFonts.robotoMono(
-                                    height: 1,
+                            Builder(
+                              builder: (context) {
+                                return GestureDetector(
+                                  onTap: () {
+                                    Scaffold.of(context).openDrawer();
+                                  },
+                                  child: Text(
+                                    'o explora el catálogo →',
+                                    style: GoogleFonts.robotoMono(
+                                      height: 1,
+                                    ),
                                   ),
-                                ),
-                              );
-                            }),
+                                );
+                              },
+                            ),
                           ],
                         ),
                         TextField(
-                          decoration: const InputDecoration(
-                            prefix: Text('Genérame una plan de clase que '),
+                          decoration: InputDecoration(
+                            prefix:
+                                const Text('Genérame una plan de clase que '),
+                            suffix: GestureDetector(
+                              onTap: () {
+                                selectImage();
+                              },
+                              child: const Text(
+                                'Agregar imagen',
+                                style: TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
                             filled: true,
                             fillColor: Colors.white,
-                            border: OutlineInputBorder(
+                            border: const OutlineInputBorder(
                               borderRadius:
                                   BorderRadius.all(Radius.circular(10)),
                               borderSide: BorderSide.none,
                             ),
                           ),
-                          onSubmitted: (String value) {
-                            controller.animateTo(
-                              dimensions.height,
-                              duration: const Duration(seconds: 1),
-                              curve: Curves.easeIn,
-                            );
+                          onSubmitted: (String value) async {
+                            if (value.isNotEmpty && loadingImage == false) {
+                              await Provider.of<AppProvider>(context,
+                                      listen: false)
+                                  .generateDocument(
+                                instruction:
+                                    'Genérame una plan de clase que $value',
+                                image: imageBase64,
+                              );
+                              controller.animateTo(
+                                dimensions.height,
+                                duration: const Duration(seconds: 1),
+                                curve: Curves.easeIn,
+                              );
+                            }
                           },
                         ),
                         const SizedBox(height: 30),
@@ -255,11 +294,12 @@ class _SplashScreenState extends State<SplashScreen> {
             ),
           ),
           Padding(
-              padding: EdgeInsets.symmetric(
-                vertical: 100,
-                horizontal: dimensions.width / 4,
-              ),
-              child: Editor(document: DocumentModel.empty())),
+            padding: EdgeInsets.symmetric(
+              vertical: 100,
+              horizontal: dimensions.width / 4,
+            ),
+            child: const Editor(),
+          ),
         ],
       ),
     );

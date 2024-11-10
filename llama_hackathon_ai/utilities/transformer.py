@@ -76,5 +76,43 @@ async def stream_response(websocket, query: Query, context: list = None):
     response_stream = together_client.stream_response(prompt=prompt, model=llama90bt, max_tokens=2500)
     
     for chunk in response_stream:
-        await websocket.send_text(chunk)
+        response = json.dumps({'action': 'ask_question', 'content': chunk})
+        await websocket.send_text(response)
+        await asyncio.sleep(0.01)
+
+
+async def stream_document(websocket, instruction: str, image: str = None):
+    prompt = f'''
+        Review my instructions and produce an appropriate academic document that:
+
+        1. Matches the inherent complexity and scope of the subject matter
+        2. Adapts the writing style and technical depth to the apparent subject domain
+        3. Uses the most suitable citation style for the field (defaulting to APA if unclear)
+        4. Structures the content with:
+        - Appropriate section headings
+        - Clear argumentative or explanatory flow
+        - Evidence-based support
+        - Field-specific terminology and conventions
+        5. Includes relevant scholarly elements like methodology, theoretical framework, or analysis as determined by the content
+        6. Maintains academic rigor while ensuring accessibility to the likely target audience
+        7. Self-adjusts length based on topic complexity and natural development of ideas
+
+        Before writing, briefly state the inferred:
+        - Document type
+        - Academic level
+        - Target audience
+        - Primary focus
+
+        Your specific instruction is: {instruction}
+
+        FORMAT:
+        - The document must be in markdown format.
+        - Make sure the language of the document is the same as the instruction.
+    '''
+
+    response_stream = together_client.stream_response(prompt=prompt, model=llama90bt, max_tokens=2500, image_base64=image)
+    
+    for chunk in response_stream:
+        response = json.dumps({'action': 'generate_document', 'content': chunk})
+        await websocket.send_text(response)
         await asyncio.sleep(0.01)

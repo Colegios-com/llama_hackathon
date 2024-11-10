@@ -13,9 +13,12 @@ import 'api_controller.dart';
 
 class AppProvider extends ChangeNotifier {
   // Variables
-  late WebSocketChannel channel;
+  late WebSocketChannel _channel;
 
-  // Document Stuff
+  // Document Data
+  DocumentModel document = DocumentModel.empty();
+
+  // Message Data
   ConversationModel? conversation;
   List<MessageModel> messages = [
     MessageModel.empty(
@@ -24,111 +27,16 @@ class AppProvider extends ChangeNotifier {
     ),
   ];
 
-  Future scrapeData({required String url}) async {
-    Map<String, dynamic> body = {'url': url};
+  // Initialize WebSocket
+  void _connectWebSocket() {
     try {
-      String data = await ApiService.post('scrape/',
-          service: 'bot', body: body, responseCode: 200);
-      if (data.isNotEmpty) {
-        print('Data: $data');
-        return data;
-      }
-    } catch (error) {
-      print('Error: $error');
-    }
-  }
-
-  Future addMessage({required Map messageData}) async {
-    MessageModel message = MessageModel.load(data: messageData);
-    messages.add(message);
-
-    notifyListeners();
-  }
-
-  Future createConversation({required String workspace}) async {
-    conversation = ConversationModel.empty(workspace: workspace);
-    Map<String, dynamic> body = conversation!.serialize();
-    try {
-      Map conversationData = await ApiService.post('conversations/',
-          service: 'api', body: body, responseCode: 201);
-      if (conversationData.isNotEmpty) {
-        conversation = ConversationModel.load(data: conversationData);
-        return true;
-      }
-    } catch (error) {
-      print('Error: $error');
-    }
-    conversation = null;
-    return false;
-  }
-
-  Future createMessage({required Map<String, dynamic> body}) async {
-    try {
-      Map messageData = await ApiService.post('messages/',
-          service: 'api', body: body, responseCode: 201);
-      if (messageData.isNotEmpty) {
-        return messageData;
-      }
-    } catch (error) {
-      print('Error: $error');
-    }
-    return false;
-  }
-
-  Future askQuestion({
-    required String query,
-    required Map context,
-    required String workspaceId,
-  }) async {
-    List filteredMessages = messages
-        .where((message) => message.sender != 'system')
-        .map((message) => message.message)
-        .toList();
-
-    List history = filteredMessages.reversed.take(6).toList();
-    if (history.isNotEmpty) {
-      history.removeAt(0);
-    }
-
-    Map<String, dynamic> body = {
-      'context': context,
-      'workspace': workspaceId,
-      'query': query,
-      'history': history,
-    };
-
-    connectToWebSocket();
-    channel.sink.add(json.encode(body));
-  }
-
-  Future sendMessage({
-    required Map context,
-    required String workspaceId,
-    required String message,
-  }) async {
-    if (conversation == null) {
-      await createConversation(workspace: workspaceId);
-    }
-
-    Map userMessage = await createMessage(body: {
-      'conversation': conversation!.id,
-      'sender': 'User',
-      'message': message
-    });
-    await addMessage(messageData: userMessage);
-
-    askQuestion(query: message, context: context, workspaceId: workspaceId);
-  }
-
-  void connectToWebSocket() {
-    try {
-      channel = WebSocketChannel.connect(
-        Uri.parse('ws://0.0.0.0/ask/'),
+      _channel = WebSocketChannel.connect(
+        Uri.parse('wss://sea-turtle-app-3zj6d.ondigitalocean.app/channel/'),
       );
 
-      channel.stream.listen(
+      _channel.stream.listen(
         (payload) {
-          handleWebSocketMessage(payload);
+          _handleWebSocketMessage(payload);
         },
         onError: (error) {
           print('WebSocket error: $error');
@@ -142,17 +50,76 @@ class AppProvider extends ChangeNotifier {
     }
   }
 
-  void handleWebSocketMessage(String payload) async {
+  // Generate Document
+  Future<void> generateDocument(
+      {required String instruction, String? image}) async {
+    _connectWebSocket();
+    Map<String, dynamic> body = {
+      'action': 'generate_document',
+      'instruction': instruction,
+      'image': image,
+    };
+    _channel.sink.add(json.encode(body));
+  }
+
+  // Send Message
+  Future<void> sendMessage({
+    required Map context,
+    required String workspaceId,
+    required String message,
+  }) async {
+    if (conversation == null) {
+      await _createConversation(workspace: workspaceId);
+    }
+
+    Map userMessage = await _createMessage(body: {
+      'conversation': conversation!.id,
+      'sender': 'User',
+      'message': message
+    });
+    await _addMessage(messageData: userMessage);
+
+    await _askQuestion(
+      query: message,
+      context: context,
+      workspaceId: workspaceId,
+    );
+  }
+
+  // Private Methods
+
+  void _handleWebSocketMessage(String payload) async {
+    print(payload);
+    Map<String, dynamic> data = json.decode(payload);
+
+    if (data['action'] == 'generate_document') {
+      _handleDocumentMessage(data);
+    } else if (data['action'] == 'ask_question') {
+      await _handleAskMessage(data);
+    }
+
+    notifyListeners();
+  }
+
+  void _handleDocumentMessage(Map<String, dynamic> data) {
+    if (data['status'] == 'END_OF_RESPONSE') {
+      _channel.sink.close();
+    } else {
+      document.content += data['content'] ?? '';
+    }
+  }
+
+  Future<void> _handleAskMessage(Map<String, dynamic> data) async {
     MessageModel currentMessage = messages.last;
     if (currentMessage.sender == 'User') {
-      addMessage(messageData: {
+      await _addMessage(messageData: {
         'conversation': conversation!.id,
         'sender': 'Agent',
         'message': '',
       });
     } else {
-      if (payload.contains('END_OF_RESPONSE')) {
-        await createMessage(body: {
+      if (data['status'] == 'END_OF_RESPONSE') {
+        await _createMessage(body: {
           'conversation': conversation!.id,
           'sender': 'Agent',
           'label': currentMessage.label,
@@ -161,39 +128,105 @@ class AppProvider extends ChangeNotifier {
           'reasoning': currentMessage.reasoning,
         });
       } else {
-        currentMessage.raw += payload;
-        // Parsing Function
-        String? extractedAnswer =
-            extractBetweenTags(currentMessage.raw, 'ANSWER');
-        if (extractedAnswer != null) {
-          currentMessage.message = extractedAnswer;
-        }
-        String? extractedLabel =
-            extractBetweenTags(currentMessage.raw, 'LABEL');
-        if (extractedLabel != null) {
-          currentMessage.label = extractedLabel;
-        }
-        String? extractedScore =
-            extractBetweenTags(currentMessage.raw, 'ANSWER_SCORE');
-        if (extractedScore != null) {
-          currentMessage.score = double.parse(extractedScore);
-        }
-        String? extractedReasoning =
-            extractBetweenTags(currentMessage.raw, 'ANSWER_SCORE_REASONING');
-        if (extractedReasoning != null) {
-          currentMessage.reasoning = extractedReasoning;
-        }
-        List followUpQuestions =
-            extractAllBetweenTags(currentMessage.raw, 'FOLLOW_UP_QUESTION');
-        if (followUpQuestions.isNotEmpty) {
-          currentMessage.followupQuestions = followUpQuestions;
-        }
+        currentMessage.raw += data['content'] ?? '';
+        _parseMessageContent(currentMessage);
       }
     }
-    notifyListeners();
   }
 
-  String? extractBetweenTags(String text, String tag) {
+  Future<void> _askQuestion({
+    required String query,
+    required Map context,
+    required String workspaceId,
+  }) async {
+    List<String> filteredMessages = messages
+        .where((message) => message.sender != 'system')
+        .map((message) => message.message)
+        .toList();
+
+    List<String> history = filteredMessages.reversed.take(6).toList();
+    if (history.isNotEmpty) {
+      history.removeAt(0);
+    }
+
+    Map<String, dynamic> body = {
+      'action': 'ask_question',
+      'context': context,
+      'workspace': workspaceId,
+      'query': query,
+      'history': history,
+    };
+
+    if (_channel == null) {
+      _connectWebSocket();
+    }
+    _channel.sink.add(json.encode(body));
+  }
+
+  void _parseMessageContent(MessageModel currentMessage) {
+    // Parsing Function
+    String rawContent = currentMessage.raw;
+
+    String? extractedAnswer = _extractBetweenTags(rawContent, 'ANSWER');
+    if (extractedAnswer != null) {
+      currentMessage.message = extractedAnswer;
+    }
+    String? extractedLabel = _extractBetweenTags(rawContent, 'LABEL');
+    if (extractedLabel != null) {
+      currentMessage.label = extractedLabel;
+    }
+    String? extractedScore = _extractBetweenTags(rawContent, 'ANSWER_SCORE');
+    if (extractedScore != null) {
+      currentMessage.score = double.tryParse(extractedScore) ?? 0.0;
+    }
+    String? extractedReasoning =
+        _extractBetweenTags(rawContent, 'ANSWER_SCORE_REASONING');
+    if (extractedReasoning != null) {
+      currentMessage.reasoning = extractedReasoning;
+    }
+    List<String> followUpQuestions =
+        _extractAllBetweenTags(rawContent, 'FOLLOW_UP_QUESTION');
+    if (followUpQuestions.isNotEmpty) {
+      currentMessage.followupQuestions = followUpQuestions;
+    }
+  }
+
+  Future<void> _addMessage({required Map messageData}) async {
+    MessageModel message = MessageModel.load(data: messageData);
+    messages.add(message);
+  }
+
+  Future<void> _createConversation({required String workspace}) async {
+    conversation = ConversationModel.empty(workspace: workspace);
+    Map<String, dynamic> body = conversation!.serialize();
+    try {
+      Map conversationData = await ApiService.post('conversations/',
+          service: 'api', body: body, responseCode: 201);
+      if (conversationData.isNotEmpty) {
+        conversation = ConversationModel.load(data: conversationData);
+      } else {
+        conversation = null;
+      }
+    } catch (error) {
+      print('Error: $error');
+      conversation = null;
+    }
+  }
+
+  Future<Map> _createMessage({required Map<String, dynamic> body}) async {
+    try {
+      Map messageData = await ApiService.post('messages/',
+          service: 'api', body: body, responseCode: 201);
+      if (messageData.isNotEmpty) {
+        return messageData;
+      }
+    } catch (error) {
+      print('Error: $error');
+    }
+    return {};
+  }
+
+  String? _extractBetweenTags(String text, String tag) {
     RegExp regex;
     if (tag == 'ANSWER') {
       regex = RegExp('<$tag>(.*?)</$tag>', dotAll: true);
@@ -203,12 +236,12 @@ class AppProvider extends ChangeNotifier {
     } else {
       regex = RegExp('<$tag>(.*?)</$tag>', dotAll: true);
     }
-    final Match? match = regex.firstMatch(text);
+    final match = regex.firstMatch(text);
     return match?.group(1);
   }
 
-  List<String> extractAllBetweenTags(String text, String tag) {
-    final RegExp regex = RegExp('<$tag>(.*?)</$tag>', dotAll: true);
+  List<String> _extractAllBetweenTags(String text, String tag) {
+    final regex = RegExp('<$tag>(.*?)</$tag>', dotAll: true);
     return regex.allMatches(text).map((match) => match.group(1)!).toList();
   }
 }

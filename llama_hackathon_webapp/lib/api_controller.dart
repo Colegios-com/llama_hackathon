@@ -5,13 +5,13 @@ import 'package:http/http.dart' as http;
 
 // URLs
 // const String apiUrl = 'http://127.0.0.1:8000/api/';
-const String botUrl = 'http://0.0.0.0/';
+// const String botUrl = 'http://0.0.0.0/';
 
 // Headers
 Map<String, String> headers = {'Content-Type': 'application/json'};
 
 const String apiUrl = 'https://aldous-api-edd7aba482d5.herokuapp.com/api/';
-// const String botUrl = 'https://seashell-app-7tqkt.ondigitalocean.app/';
+const String botUrl = 'https://sea-turtle-app-3zj6d.ondigitalocean.app/';
 
 class ApiService {
   static getBaseUrl(String service, String url) {

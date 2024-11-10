@@ -5,7 +5,7 @@ class TogetherAiClient:
     def __init__(self, key):
         self.key = key
 
-    def batch_response(self, prompt, model, max_tokens):
+    def batch_response(self, prompt, model, max_tokens, image_base64=None):
         try:
             headers = {
                 'Authorization': f'Bearer {self.key}',
@@ -25,13 +25,34 @@ class TogetherAiClient:
                 ],
                 'negative_prompt': '',
                 'type': 'chat',
-                'messages': [
+            
+            }
+            if model == 'meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo':
+                payload['messages'] = [
                     {
                         'content': prompt,
                         'role': 'user'
                     }
-                ],
-            }
+                ]
+            else:
+                payload['messages'] = [
+                    {
+                        'content': [
+                            {
+                                'type': 'text',
+                                'text': prompt
+                            }
+                        ],
+                        'role': 'user'
+                    }
+                ]
+            if image_base64 and model == 'meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo':
+                payload['messages'][0]['content'].append({
+                    'type': 'image_url',
+                    'image_url': {
+                        'url': f'data:image/jpeg;base64,{image_base64}'
+                    }
+                })
             response = requests.post(
                 'https://api.together.xyz/v1/chat/completions', 
                 headers=headers, 
@@ -48,7 +69,7 @@ class TogetherAiClient:
             return {'status': False, 'message': 'Oops, there was an error'}
 
 
-    def stream_response(self, prompt, model, max_tokens):
+    def stream_response(self, prompt, model, max_tokens, image_base64=None):
         try:
             headers = {
                 'Authorization': f'Bearer {self.key}',
@@ -69,14 +90,35 @@ class TogetherAiClient:
                 'negative_prompt': '',
                 'sessionKey': 'd9c5e540-749a-4c81-b701-6a5397b198d0',
                 'type': 'chat',
-                'messages': [
+              
+                'stream': True,
+            }
+            if model == 'meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo':
+                payload['messages'] = [
                     {
                         'content': prompt,
                         'role': 'user'
                     }
-                ],
-                'stream': True,
-            }
+                ]
+            else:
+                payload['messages'] = [
+                    {
+                        'content': [
+                            {
+                                'type': 'text',
+                                'text': prompt
+                            }
+                        ],
+                        'role': 'user'
+                    }
+                ]
+            if image_base64 and model == 'meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo':
+                payload['messages'][0]['content'].append({
+                    'type': 'image_url',
+                    'image_url': {
+                        'url': f'data:image/jpeg;base64,{image_base64}'
+                    }
+                })
             with requests.post('https://api.together.xyz/v1/chat/completions', headers=headers, json=payload, stream=True) as response:
                 if response.status_code == 200:
                     for line in response.iter_lines():

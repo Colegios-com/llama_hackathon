@@ -5,7 +5,7 @@ from init.fast_api import app
 from utilities.parsing import chunk_data, repair_json_response
 from utilities.embedding import embed_data
 from utilities.storage import save_data, get_data, delete_data, query_data
-from utilities.transformer import prepare_for_embedding, stream_response
+from utilities.transformer import prepare_for_embedding, stream_response, stream_document
 
 # Models
 from data.models import Url, Artifact, Query
@@ -36,23 +36,28 @@ def delete_embeddings(id: str) -> str:
     return 'Data deleted successfully.' if success else 'Data deletion failed.'
 
 
-@app.websocket('/ask/')
-async def websocket_endpoint(websocket: WebSocket):
+@app.websocket('/channel/')
+async def websocket_channel(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
             json_data = await websocket.receive_json()
             if json_data:
-                query = Query(**json_data)
-
-            # context = await query_data(query=query)
-            context = query.context
-
-            raw_response = await stream_response(websocket, query, context)
+                if json_data['action'] == 'ask_question':
+                    query = Query(**json_data)
+                    context = query.context
+                    raw_response = await stream_response(websocket, query, context)
+                elif json_data['action'] == 'generate_document':
+                    instruction = json_data['instruction']
+                    image = json_data['image']
+                    raw_response = await stream_document(websocket, instruction, image)
+                
             if raw_response:
-                await websocket.send_text(raw_response)
+                response = json.dumps({'action': json_data['action'], 'content': raw_response})
+                await websocket.send_text(response)
             else:
-                await websocket.send_text('END_OF_RESPONSE')
+                response = json.dumps({'status': 'END_OF_RESPONSE'})
+                await websocket.send_text(response)
 
     except Exception as e:
         print(f'WebSocket error: {e}')

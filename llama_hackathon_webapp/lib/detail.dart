@@ -34,7 +34,7 @@ class _DetailState extends State<Detail> {
           icon: const Icon(Icons.arrow_back),
         ),
         title: Text(
-          '🦙 eduLlama',
+          '🦙 Llamar',
           style: GoogleFonts.robotoMono(
             height: 1,
             fontSize: 30,

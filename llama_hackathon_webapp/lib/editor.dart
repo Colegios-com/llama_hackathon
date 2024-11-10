@@ -10,13 +10,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:llama_hackathon_webapp/stylesheet.dart';
 import 'package:llama_hackathon_webapp/utilities.dart';
 
-// Models
-import 'package:llama_hackathon_webapp/models.dart';
+// State
+import 'app_provider.dart';
+import 'models.dart';
 
 class Editor extends StatefulWidget {
-  final DocumentModel document;
-
-  const Editor({required this.document, super.key});
+  const Editor({super.key});
 
   @override
   State<Editor> createState() => _EditorState();
@@ -24,6 +23,7 @@ class Editor extends StatefulWidget {
 
 class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
   late AnimationController controller;
+  late DocumentModel document;
 
   Widget compactActions() {
     return StatefulBuilder(builder: (context, setModalState) {
@@ -55,7 +55,7 @@ class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
                 subtitle: const Text('Edita tu documento.'),
                 onTap: () async {
                   setState(() {
-                    widget.document.editing = true;
+                    document.editing = true;
                   });
                   Navigator.pop(context);
                 },
@@ -70,8 +70,7 @@ class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
                 onTap: () {
                   copyToClipboard(
                     context,
-                    widget.document.content ??
-                        'Este documento no contiene contenido.',
+                    document.content ?? 'Este documento no contiene contenido.',
                   );
                   showAlert(context,
                       type: 'warning',
@@ -92,15 +91,15 @@ class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
               ),
               ListTile(
                 leading: Icon(
-                  widget.document.private ? Icons.lock : Icons.lock_open,
-                  color: widget.document.private ? Colors.amber : Colors.grey,
+                  document.private ? Icons.lock : Icons.lock_open,
+                  color: document.private ? Colors.amber : Colors.grey,
                 ),
                 title: const Text('Privacidad'),
                 subtitle:
                     const Text('Haz que tu documento sea privado o público.'),
                 onTap: () async {
                   setModalState(() {
-                    widget.document.private = !widget.document.private;
+                    document.private = !document.private;
                   });
                 },
               ),
@@ -138,8 +137,8 @@ class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
     if (dimensions.width < 600) {
       return IconButton(
         onPressed: () {
-          if (widget.document.editing) {
-            widget.document.editing = false;
+          if (document.editing) {
+            document.editing = false;
           } else {
             showModalBottomSheet(
               context: context,
@@ -149,14 +148,13 @@ class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
             );
           }
         },
-        icon: widget.document.editing
-            ? const Icon(Icons.save)
-            : const Icon(Icons.menu),
+        icon:
+            document.editing ? const Icon(Icons.save) : const Icon(Icons.menu),
       );
     } else {
       return Row(
         children: [
-          if (widget.document.synchronizing)
+          if (document.synchronizing)
             IconButton(
               onPressed: () {},
               icon: AnimatedBuilder(
@@ -172,32 +170,32 @@ class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
                 },
               ),
             ),
-          if (!widget.document.synchronizing)
+          if (!document.synchronizing)
             IconButton(
               onPressed: () async {
-                if (widget.document.editing) {
+                if (document.editing) {
                   setState(() {
-                    widget.document.synchronizing = true;
-                    widget.document.editing = false;
+                    document.synchronizing = true;
+                    document.editing = false;
                   });
 
                   await Future.delayed(const Duration(seconds: 2), () {
                     setState(() {
-                      widget.document.synchronizing = false;
+                      document.synchronizing = false;
                     });
                   });
 
                   setState(() {
-                    widget.document.synchronizing = false;
+                    document.synchronizing = false;
                   });
                 } else {
                   setState(() {
-                    widget.document.editing = true;
+                    document.editing = true;
                   });
                 }
               },
               icon: Icon(
-                widget.document.editing ? Icons.save : Icons.edit,
+                document.editing ? Icons.save : Icons.edit,
                 color: Colors.grey,
               ),
             ),
@@ -205,8 +203,7 @@ class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
             onPressed: () {
               copyToClipboard(
                 context,
-                widget.document.content ??
-                    'Este documento no contiene contenido.',
+                document.content ?? 'Este documento no contiene contenido.',
               );
               showAlert(context,
                   type: 'warning',
@@ -228,12 +225,12 @@ class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
           IconButton(
             onPressed: () async {
               setState(() {
-                widget.document.private = !widget.document.private;
+                document.private = !document.private;
               });
             },
             icon: Icon(
-              widget.document.private ? Icons.lock : Icons.lock_open,
-              color: widget.document.private ? Colors.amber : Colors.grey,
+              document.private ? Icons.lock : Icons.lock_open,
+              color: document.private ? Colors.amber : Colors.grey,
             ),
           ),
           GestureDetector(
@@ -262,6 +259,12 @@ class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
       duration: const Duration(seconds: 2),
       vsync: this,
     )..repeat();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    document = Provider.of<AppProvider>(context).document;
   }
 
   @override
@@ -304,12 +307,11 @@ class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
               actions(),
             ],
           ),
-          widget.document.editing
+          document.editing
               ? TextField(
-                  controller:
-                      TextEditingController(text: widget.document.content),
+                  controller: TextEditingController(text: document.content),
                   onChanged: (value) {
-                    widget.document.content = value;
+                    document.content = value;
                   },
                   maxLines: null,
                   decoration: const InputDecoration(
@@ -328,7 +330,7 @@ class _EditorState extends State<Editor> with SingleTickerProviderStateMixin {
                       print('Could not launch $url');
                     }
                   },
-                  data: widget.document.content ?? '',
+                  data: document.content ?? '',
                 ),
         ],
       ),
