@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:llama_hackathon_webapp/app_provider.dart';
+import 'dart:convert';
 
 // Packages
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:file_picker/file_picker.dart';
 
 // Models
+import 'package:llama_hackathon_webapp/app_provider.dart';
 import 'package:llama_hackathon_webapp/models.dart';
 
 class Chat extends StatefulWidget {
@@ -19,15 +21,40 @@ class Chat extends StatefulWidget {
 
 class _ChatState extends State<Chat> {
   TextEditingController textController = TextEditingController();
+
+  String? fileText;
   bool loading = false;
+  bool loadingFile = false;
+
+  Future selectFile() async {
+    setState(() {
+      loadingFile = true;
+    });
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.media,
+      withData: true,
+    );
+
+    if (result != null) {
+      // Get the bytes and decode them to string
+      final bytes = result.files.first.bytes;
+      if (bytes != null) {
+        fileText = String.fromCharCodes(bytes);
+      }
+    }
+    setState(() {
+      loadingFile = false;
+    });
+  }
 
   Future sendMessage() async {
     if (!loading) {
       loading = true;
       await Provider.of<AppProvider>(context, listen: false).sendMessage(
-        context: widget.context,
         workspaceId: 'fe38fcb3-2fa7-4395-9096-bf950135f1b7',
         message: textController.text,
+        context: widget.context,
+        fileText: fileText,
       );
       loading = false;
       textController.clear();
@@ -91,7 +118,7 @@ class _ChatState extends State<Chat> {
                                     Expanded(
                                       child: Text(
                                         message.sender != 'User'
-                                            ? 'Aldous'
+                                            ? 'Llamar'
                                             : 'Usuario',
                                         style: GoogleFonts.roboto(
                                           fontWeight: FontWeight.bold,
@@ -217,6 +244,15 @@ class _ChatState extends State<Chat> {
                             decoration: InputDecoration(
                               filled: true,
                               fillColor: Colors.white,
+                              suffix: GestureDetector(
+                                onTap: () {
+                                  selectFile();
+                                },
+                                child: const Icon(
+                                  Icons.note_add,
+                                  size: 15,
+                                ),
+                              ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(5),
                                 borderSide: BorderSide.none,

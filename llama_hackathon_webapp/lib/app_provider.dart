@@ -23,7 +23,8 @@ class AppProvider extends ChangeNotifier {
   List<MessageModel> messages = [
     MessageModel.empty(
       sender: 'system',
-      message: 'Hello! How can I help you today?',
+      message:
+          'Hola! Soy Llamar, tu asistente académico virtual. \n\nPuedes preguntarme cualquier cosa sobre el CNB, o incluso pedirme que valide un documento academico.',
     ),
   ];
 
@@ -31,6 +32,7 @@ class AppProvider extends ChangeNotifier {
   void _connectWebSocket() {
     try {
       _channel = WebSocketChannel.connect(
+        // Uri.parse('ws://0.0.0.0/channel/'),
         Uri.parse('wss://sea-turtle-app-3zj6d.ondigitalocean.app/channel/'),
       );
 
@@ -67,6 +69,7 @@ class AppProvider extends ChangeNotifier {
     required Map context,
     required String workspaceId,
     required String message,
+    String? fileText,
   }) async {
     if (conversation == null) {
       await _createConversation(workspace: workspaceId);
@@ -80,16 +83,16 @@ class AppProvider extends ChangeNotifier {
     await _addMessage(messageData: userMessage);
 
     await _askQuestion(
+      workspaceId: workspaceId,
       query: message,
       context: context,
-      workspaceId: workspaceId,
+      fileText: fileText,
     );
   }
 
   // Private Methods
 
   void _handleWebSocketMessage(String payload) async {
-    print(payload);
     Map<String, dynamic> data = json.decode(payload);
 
     if (data['action'] == 'generate_document') {
@@ -135,9 +138,10 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _askQuestion({
+    required String workspaceId,
     required String query,
     required Map context,
-    required String workspaceId,
+    String? fileText,
   }) async {
     List<String> filteredMessages = messages
         .where((message) => message.sender != 'system')
@@ -151,15 +155,14 @@ class AppProvider extends ChangeNotifier {
 
     Map<String, dynamic> body = {
       'action': 'ask_question',
-      'context': context,
       'workspace': workspaceId,
-      'query': query,
       'history': history,
+      'query': query,
+      'context': context,
+      'document_text': fileText,
     };
 
-    if (_channel == null) {
-      _connectWebSocket();
-    }
+    _connectWebSocket();
     _channel.sink.add(json.encode(body));
   }
 

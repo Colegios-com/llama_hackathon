@@ -41,16 +41,7 @@ class _DetailState extends State<Detail> {
             fontWeight: FontWeight.w900,
           ),
         ),
-        actions: [
-          Builder(builder: (context) {
-            return IconButton(
-              onPressed: () {
-                Scaffold.of(context).openEndDrawer();
-              },
-              icon: const Icon(Icons.chat_bubble),
-            );
-          }),
-        ],
+        actions: [Container()],
       ),
       endDrawer: Chat(context: widget.data),
       body: ListView(
@@ -134,6 +125,18 @@ class _DetailState extends State<Detail> {
           ),
         ],
       ),
+      floatingActionButton: Builder(builder: (context) {
+        return FloatingActionButton(
+          backgroundColor: Colors.black,
+          onPressed: () {
+            Scaffold.of(context).openEndDrawer();
+          },
+          child: const Icon(
+            Icons.chat_bubble,
+            color: Colors.white,
+          ),
+        );
+      }),
     );
   }
 }

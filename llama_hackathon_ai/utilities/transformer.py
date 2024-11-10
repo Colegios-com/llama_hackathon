@@ -39,6 +39,7 @@ def prepare_for_embedding(text: str) -> str:
 
 
 async def stream_response(websocket, query: Query, context: list = None):
+    print('Generating response...')
     prompt = f'''
         History: {query.history}
         Question: {query.query}
@@ -61,6 +62,50 @@ async def stream_response(websocket, query: Query, context: list = None):
         <XML>
             <LABEL>label</LABEL>
             <ANSWER>conversational, informative answer</ANSWER>
+            <ANSWER_SCORE>score</ANSWER_SCORE>
+            <ANSWER_SCORE_REASONING>brief reasoning</ANSWER_SCORE_REASONING>
+            <FOLLOW_UP_QUESTIONS>
+                <FOLLOW_UP_QUESTION>question 1</FOLLOW_UP_QUESTION>
+                <FOLLOW_UP_QUESTION>question 2</FOLLOW_UP_QUESTION>
+                <FOLLOW_UP_QUESTION>question 3</FOLLOW_UP_QUESTION>
+            </FOLLOW_UP_QUESTIONS>
+        </XML>
+
+        Aim for a natural, helpful, and engaging conversation.
+    '''
+
+    response_stream = together_client.stream_response(prompt=prompt, model=llama90bt, max_tokens=2500)
+    
+    for chunk in response_stream:
+        response = json.dumps({'action': 'ask_question', 'content': chunk})
+        await websocket.send_text(response)
+        await asyncio.sleep(0.01)
+
+
+async def stream_validation(websocket, query: Query, context: list = None, document_text: str = None):
+    print('Validating document...')
+    prompt = f'''
+        Question: {query.query}
+        Context: {context}
+        Document: {document_text}
+
+        Instructions:
+        1. Compare document content directly to educational standard context
+        2. Assess if document meets the standard's requirements (Yes/No)
+        3. Identify specific alignments with the standard
+        4. List any missing elements or gaps
+        5. Evaluate the depth and clarity of content
+        6. Check for age/grade level appropriateness
+        7. Note any inaccuracies or misconceptions
+        8. Provide a numerical rating (1-10) with explanation
+        9. List 3 specific strengths
+        10. List 3 areas for improvement
+        11. Give actionable recommendations for enhancement
+
+        Use this XML format:
+        <XML>
+            <LABEL>label</LABEL>
+            <ANSWER>document analysys results, strengths, improvement areas and actionable recommendations</ANSWER>
             <ANSWER_SCORE>score</ANSWER_SCORE>
             <ANSWER_SCORE_REASONING>brief reasoning</ANSWER_SCORE_REASONING>
             <FOLLOW_UP_QUESTIONS>

@@ -5,7 +5,7 @@ from init.fast_api import app
 from utilities.parsing import chunk_data, repair_json_response
 from utilities.embedding import embed_data
 from utilities.storage import save_data, get_data, delete_data, query_data
-from utilities.transformer import prepare_for_embedding, stream_response, stream_document
+from utilities.transformer import prepare_for_embedding, stream_response, stream_validation, stream_document
 
 # Models
 from data.models import Url, Artifact, Query
@@ -46,7 +46,11 @@ async def websocket_channel(websocket: WebSocket):
                 if json_data['action'] == 'ask_question':
                     query = Query(**json_data)
                     context = query.context
-                    raw_response = await stream_response(websocket, query, context)
+                    print(f'Query: {query.json()}')
+                    if query.document_text:
+                        raw_response = await stream_validation(websocket, query, context, query.document_text)
+                    else:
+                        raw_response = await stream_response(websocket, query, context)
                 elif json_data['action'] == 'generate_document':
                     instruction = json_data['instruction']
                     image = json_data['image']

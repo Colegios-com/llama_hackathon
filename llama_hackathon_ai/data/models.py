@@ -24,8 +24,8 @@ class Embedding(BaseModel):
 
 
 class Query(BaseModel):
-    context: dict
     workspace: str
     query: str
+    context: dict
     history: Optional[list] = None
-    examples: Optional[list] = None
+    document_text: Optional[str] = None
